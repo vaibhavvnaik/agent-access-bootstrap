@@ -1,0 +1,3 @@
+# Local auth-state backups
+agent-access-auth-state.tgz
+*.agent-access-auth-state.tgz
