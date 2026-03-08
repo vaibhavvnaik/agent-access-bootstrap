@@ -6,6 +6,7 @@ MONGO_EMAIL="${MONGO_EMAIL:-ncgcompany2023@gmail.com}"
 STATE_FILE_DEFAULT="${HOME}/agent-access-auth-state.tgz"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK_SCRIPT="${SCRIPT_DIR}/check-auth.sh"
+PROVIDERS_DIR="${SCRIPT_DIR}/providers.d"
 
 log() { printf '[agent-access] %s\n' "$*"; }
 warn() { printf '[agent-access][warn] %s\n' "$*" >&2; }
@@ -26,6 +27,30 @@ Commands:
 Env overrides:
   INFRA_EMAIL, MONGO_EMAIL
 USAGE
+}
+
+run_provider_phase() {
+  local phase="$1"
+  local script
+  [ -d "$PROVIDERS_DIR" ] || return 0
+
+  for script in "$PROVIDERS_DIR"/*.sh; do
+    [ -f "$script" ] || continue
+    [ -x "$script" ] || continue
+    log "Provider hook: $(basename "$script") [$phase]"
+    "$script" "$phase"
+  done
+}
+
+collect_provider_backup_paths() {
+  local script
+  [ -d "$PROVIDERS_DIR" ] || return 0
+
+  for script in "$PROVIDERS_DIR"/*.sh; do
+    [ -f "$script" ] || continue
+    [ -x "$script" ] || continue
+    "$script" backup-paths || true
+  done
 }
 
 ensure_path() {
@@ -91,6 +116,7 @@ install_tools() {
   pipx install b2 >/dev/null 2>&1 || pipx upgrade b2
 
   log "Install complete"
+  run_provider_phase install
 }
 
 login_tools() {
@@ -124,6 +150,7 @@ login_tools() {
   atlas auth whoami >/dev/null 2>&1 || atlas auth login --noBrowser
 
   log "Login flow complete"
+  run_provider_phase login
 }
 
 verify_tools() {
@@ -132,6 +159,7 @@ verify_tools() {
     exit 1
   fi
   bash "$CHECK_SCRIPT"
+  run_provider_phase verify
 }
 
 backup_state() {
@@ -144,6 +172,11 @@ backup_state() {
   [ -d "$HOME/.config/b2" ] && paths+=(".config/b2")
   [ -f "$HOME/.b2_account_info" ] && paths+=(".b2_account_info")
   [ -d "$HOME/.config/atlascli" ] && paths+=(".config/atlascli")
+
+  while IFS= read -r extra_path; do
+    [ -n "$extra_path" ] || continue
+    [ -e "$HOME/$extra_path" ] && paths+=("$extra_path")
+  done < <(collect_provider_backup_paths)
 
   if [ ${#paths[@]} -eq 0 ]; then
     warn "No auth state paths found to backup"
@@ -169,6 +202,7 @@ restore_state() {
 
   tar -xzf "$infile" -C "$HOME"
   log "Restored auth state from: $infile"
+  run_provider_phase restore
 }
 
 cmd="${1:-help}"

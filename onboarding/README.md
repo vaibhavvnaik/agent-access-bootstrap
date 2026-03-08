@@ -14,6 +14,7 @@ This runs:
 - `install`: installs/updates CLIs and persistent PATH
 - `login`: interactive auth for Vercel, Railway, GCloud, Backblaze, Atlas
 - `verify`: confirms install + auth status
+- includes Agent Browser + Vercel skill packs (`agent-browser`, `dogfood`, `electron`, `slack`)
 
 ## Individual commands
 
@@ -22,6 +23,22 @@ bash onboarding/agent-access-bootstrap.sh install
 bash onboarding/agent-access-bootstrap.sh login
 bash onboarding/agent-access-bootstrap.sh verify
 ```
+
+## Extend with new tools/providers
+
+Add executable provider scripts under `onboarding/providers.d/`.
+
+- Start from `onboarding/providers.d/template-provider.sh`
+- Implement phases: `install`, `login`, `verify`, `backup-paths`, `restore`
+- The orchestrator auto-runs these hooks during `install/login/verify/backup/restore`
+
+This keeps the core bootstrap stable while allowing future providers to plug in.
+
+Built-in provider hook:
+- `onboarding/providers.d/vercel-agent-browser-skills.sh`
+  - installs `agent-browser`
+  - runs `agent-browser install` (Chromium download)
+  - installs Vercel skills globally with `npx skills add ... -y -g`
 
 ## Backup and restore auth state
 
